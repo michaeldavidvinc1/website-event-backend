@@ -2,33 +2,33 @@ const Participant = require("../../api/v1/participants/model");
 const Events = require("../../api/v1/events/model");
 const Orders = require("../../api/v1/orders/model");
 const Payments = require("../../api/v1/payments/model");
+
 const {
   BadRequestError,
   NotFoundError,
   UnauthorizedError,
-  UnauthenticatedError,
 } = require("../../errors");
-const { createJWT, createTokenParticipant } = require("../../utils");
+const { createTokenParticipant, createJWT } = require("../../utils");
 
 const { otpMail } = require("../mail");
 
 const signupParticipant = async (req) => {
   const { firstName, lastName, email, password, role } = req.body;
 
-  //! Cek user di db
+  // jika email dan status tidak aktif
   let result = await Participant.findOne({
     email,
     status: "tidak aktif",
   });
 
   if (result) {
-    (result.firstName = firtsName),
-      (result.lastName = lastName),
-      (result.role = role),
-      (result.email = email),
-      (result.password = password),
-      (result.otp = Math.floor(Math.random() * 9999)),
-      await result.save();
+    result.firstName = firstName;
+    result.lastName = lastName;
+    result.role = role;
+    result.email = email;
+    result.password = password;
+    result.otp = Math.floor(Math.random() * 9999);
+    await result.save();
   } else {
     result = await Participant.create({
       firstName,
@@ -53,7 +53,7 @@ const activateParticipant = async (req) => {
     email,
   });
 
-  if (!check) throw new NotFoundError("Participant belum terdaftar");
+  if (!check) throw new NotFoundError("Partisipan belum terdaftar");
 
   if (check && check.otp !== otp) throw new BadRequestError("Kode otp salah");
 
@@ -62,9 +62,7 @@ const activateParticipant = async (req) => {
     {
       status: "aktif",
     },
-    {
-      new: true,
-    }
+    { new: true }
   );
 
   delete result._doc.password;
@@ -86,7 +84,7 @@ const signinParticipant = async (req) => {
   }
 
   if (result.status === "tidak aktif") {
-    throw new UnauthenticatedError("Akun anda belum aktif");
+    throw new UnauthorizedError("Akun anda belum aktif");
   }
 
   const isPasswordCorrect = await result.comparePassword(password);
@@ -113,20 +111,24 @@ const getOneEvent = async (req) => {
   const { id } = req.params;
   const result = await Events.findOne({ _id: id })
     .populate("category")
-    .populate("talent")
+    .populate({ path: "talent", populate: "image" })
     .populate("image");
 
-  if (!result) throw new NotFoundError(`Tidak ada acara dengan id : ${id}`);
+  if (!result) throw new NotFoundError(`Tidak ada acara dengan id :  ${id}`);
 
   return result;
 };
 
 const getAllOrders = async (req) => {
+  console.log(req.participant);
   const result = await Orders.find({ participant: req.participant.id });
   return result;
 };
 
-//! Checkout Service
+/**
+ * Tugas Send email invoice
+ * TODO: Ambil data email dari personal detail
+ *  */
 const checkoutOrder = async (req) => {
   const { event, personalDetail, payment, tickets } = req.body;
 
@@ -192,12 +194,21 @@ const checkoutOrder = async (req) => {
   return result;
 };
 
+const getAllPaymentByOrganizer = async (req) => {
+  const { organizer } = req.params;
+
+  const result = await Payments.find({ organizer: organizer });
+
+  return result;
+};
+
 module.exports = {
   signupParticipant,
   activateParticipant,
   signinParticipant,
   getAllEvents,
-  getAllOrders,
   getOneEvent,
+  getAllOrders,
   checkoutOrder,
+  getAllPaymentByOrganizer,
 };
